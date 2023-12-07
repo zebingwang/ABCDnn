@@ -3,7 +3,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 import uproot
 from onehotencoder import OneHotEncoder_int
-from skhep.visual import MplPlotter
 import os
 import pandas as pd
 
@@ -18,7 +17,9 @@ def prepdata():
     upperlimit = [10, 10, 10, 10, 9, 3]
     _onehotencoder = OneHotEncoder_int(iscategorical, upperlimit=upperlimit)
 
-    inputtmp = ttjjtree.pandas.df(featurevars)
+    #inputtmp = ttjjtree.pandas.df(featurevars)
+    arrays = ttjjtree.arrays(featurevars, library="pd")
+    inputtmp = pd.DataFrame(arrays)
 
     iscategorical = np.array(inputtmp.dtypes == np.int32)
 
@@ -55,7 +56,8 @@ def writetorootfile(rootfilename, datadict):
     branchdict = {}
     for key, data in datadict.items():
         branchdict[key] = data.dtype
-    tree = uproot.newtree(branches=branchdict)
+    #tree = uproot.newtree(branches=branchdict)
+    tree = branchdict
     with uproot.recreate(rootfilename) as f:
         f['mytree'] = tree
         f['mytree'].extend(datadict)
@@ -190,6 +192,7 @@ def train_and_validate(steps=10000, minibatch=128, LRrange=[0.0001, 0.00001, 100
                 for fakedata, seld, plottext in zip(fakedatalist, select_data, plottextlist):
                     input_data = rawinputs[seld]
                     # Make ratio plots
+                    '''
                     plotaxes = MplPlotter.ratio_plot(dict(x=input_data[li[1]], bins=nbins, range=(li[2], li[3]), errorbars=True, normed=True, histtype='marker'), \
                         dict(x=fakedata[:, pos], bins=nbins, range=(li[2], li[3]), errorbars=True, normed=True), ratio_range=(0.25, 1.9))
                         
@@ -197,7 +200,7 @@ def train_and_validate(steps=10000, minibatch=128, LRrange=[0.0001, 0.00001, 100
                     plotaxes[0][0].set_yscale(yscale)
                     plotfig.set_size_inches(5,5)
                     plotfig.savefig(os.path.join(savedir, f'result_{li[1]}_{iplot}_{yscale}_ratio.pdf'))
-
+                    '''
                     # make matrix of plots
                     row = iplot // ncol
                     col = iplot % ncol
@@ -205,15 +208,21 @@ def train_and_validate(steps=10000, minibatch=128, LRrange=[0.0001, 0.00001, 100
                     plt.sca(ax[row,col])
                     ax[row,col].set_yscale(yscale)
                     ax[row,col].set_xlabel(f"${li[0]}$ (GeV)")
-                    MplPlotter.hist(input_data[li[1]], bins=nbins, alpha=0.5, range=(li[2], li[3]), errorbars=True, histtype='marker', normed=True)
-                    MplPlotter.hist(fakedata[:,pos], bins=nbins, alpha=0.5, range=(li[2], li[3]), errorbars=True, normed=True)
-                    MplPlotter.hist(bkg[li[1]], bins=nbins, alpha=0.5, range=(li[2], li[3]), histtype='step', normed=True)
+                    plt.hist(input_data[li[1]], bins=nbins, alpha=0.5, range=(li[2], li[3]), histtype='bar', density=True)
+                    #plt.hist(fakedata[:,pos], bins=nbins, alpha=0.5, range=(li[2], li[3]), density=True)
+                    hist1, bins = np.histogram(fakedata[:,pos],bins=nbins, range=(li[2], li[3]), density=True)
+                    scale = len(fakedata[:,pos]) / sum(hist1)
+                    err = np.sqrt(hist1 * scale) / scale
+                    center = (bins[:-1] + bins[1:]) / 2
+                    plt.errorbar(center, hist1, yerr=err, fmt='.', c='r', markersize=8,capthick=0)
+
+                    plt.hist(bkg[li[1]], bins=nbins, alpha=0.5, range=(li[2], li[3]), histtype='step', density=True)
                     plt.text(0.6, 0.8, plottext, transform=ax[row,col].transAxes, fontsize=10)
             
                 fig.tight_layout()
                 fig.savefig(os.path.join(savedir, f'result_matrix_{li[1]}_{yscale}.pdf'))
 
-    generatesigsample = True
+    generatesigsample = False
     if generatesigsample:
         bkgsigfakedata = np.vstack(fakedatalist)
  
