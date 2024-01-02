@@ -6,14 +6,18 @@ from onehotencoder import OneHotEncoder_int
 import os
 import pandas as pd
 
-featurevars = ['met', 'ht', 'pt5', 'pt6', 'njet', 'nbtag']
+#featurevars = ['met', 'ht', 'pt5', 'pt6', 'njet', 'nbtag']
 
-rootfile='ttjjresult.root'
+#rootfile='ttjjresult.root'
+
+featurevars = ['H_mass', 'H_pt', 'Z_pt', 'Z_eta', 'Z_phi', 'gamma_pt', 'gamma_eta', 'gamma_phi', 'gamma_mvaID', 'n_jets', 'n_leptons', 'regions']
+rootfile_target='./datasets/data.root'
+rootfile_source='./datasets/ZGToLLG.root'
 
 def prepdata():
     ttjj = uproot.open(rootfile)
     ttjjtree = ttjj['mytree']
-    iscategorical = [False, False, False, False, True, True]
+    iscategorical = [False, False, False, False, False, False, False, False, False, False, False, True]
     upperlimit = [10, 10, 10, 10, 9, 3]
     _onehotencoder = OneHotEncoder_int(iscategorical, upperlimit=upperlimit)
 

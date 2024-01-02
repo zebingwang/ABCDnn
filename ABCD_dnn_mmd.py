@@ -134,15 +134,31 @@ class ABCDdnn(object):
         self.optimizer = tfk.optimizers.Adam(learning_rate = lr_fn,  beta_1=self.beta1, beta_2=self.beta2, epsilon=1e-5, name='nafopt')
         pass
 
-    def setrealdata(self, numpydata, eventweight=None):
-        self.numpydata = numpydata
-        self.ntotalevents = numpydata.shape[0]
-        self.datacounter = 0
-        self.randorder = np.random.permutation(self.numpydata.shape[0])
+    def setrealdata(self, numpydata_target, numpydata_source, eventweight=None):
+        #self.numpydata = numpydata
+        #self.ntotalevents = numpydata.shape[0]
+        #self.datacounter = 0
+        #self.randorder = np.random.permutation(self.numpydata.shape[0])
+        #if eventweight is not None:
+        #    self.eventweight = eventweight
+        #else:
+        #    self.eventweight = np.ones((self.ntotalevents, 1), np.float32)
+        #pass
+        self.numpydata_target = numpydata_target
+        self.numpydata_source = numpydata_source
+        self.ntotalevents_target = numpydata_target.shape[0]
+        self.ntotalevents_source = numpydata_source.shape[0]
+        self.datacounter_target = 0
+        self.datacounter_source = 0
+        self.nextconditional = self.numpydata_source[0, self.inputdim:]
+        self.randorder_target = np.random.permutation(self.numpydata_target.shape[0])
+        self.randorder_source = np.random.permutation(self.numpydata_source.shape[0])
         if eventweight is not None:
-            self.eventweight = eventweight
+            self.eventweight_target = eventweight
+            self.eventweight_source = eventweight
         else:
-            self.eventweight = np.ones((self.ntotalevents, 1), np.float32)
+            self.eventweight_target = np.ones((self.ntotalevents_target, 1), np.float32)
+            self.eventweight_source = np.ones((self.ntotalevents_source, 1), np.float32)
         pass
 
 
@@ -167,9 +183,66 @@ class ABCDdnn(object):
             self.epoch = self.monitor_record[-1][0] + 1
         pass
 
-    def get_next_batch(self, size=None, cond=False):
+    def get_next_batch(self, size=None, source=False):
         """Return minibatch from random ordered numpy data
         """
+        if source:
+            if size is None:
+                size = self.minibatch
+            if self.datacounter_source + size >= self.ntotalevents_source:
+                self.datacounter_source = 0
+                self.randorder_source = np.random.permutation(self.numpydata_source.shape[0])
+            else:
+                self.datacounter_source += size
+
+
+            batchbegin_source = self.datacounter_source
+            self.nextconditional = self.numpydata_source[self.randorder_source[batchbegin_source], self.inputdim:]
+            # find all data 
+            bigenough_source = False
+            while(not bigenough_source):
+                match_source = (self.numpydata_source[:, self.inputdim:] == self.nextconditional).all(axis=1)
+                nsamples_incategory_source = np.count_nonzero(match_source)
+                if nsamples_incategory_source>=self.minibatch:
+                    bigenough_source = True
+                batchbegin_source += 1
+                if batchbegin_source >= self.ntotalevents_source:
+                    batchbegin_source = 0
+
+            matchingarr_source = self.numpydata_source[match_source, :]
+            matchingwgt_source = self.eventweight_source[match_source, :]
+            randorder_source = np.random.permutation(matchingarr_source.shape[0])
+            nextbatch = matchingarr_source[randorder_source[0:self.minibatch], :]
+            nextbatchwgt = matchingwgt_source[randorder_source[0:self.minibatch], :]
+        else:
+            if size is None:
+                size = self.minibatch
+            if self.datacounter_target + size >= self.ntotalevents_target:
+                self.datacounter_target = 0
+                self.randorder_target = np.random.permutation(self.numpydata_target.shape[0])
+            else:
+                self.datacounter_target += size
+
+
+            batchbegin_target = self.datacounter_target
+            # find all data 
+            bigenough_target = False
+            while(not bigenough_target):
+                match_target = (self.numpydata_target[:, self.inputdim:] == self.nextconditional).all(axis=1)
+                nsamples_incategory_target = np.count_nonzero(match_target)
+                if nsamples_incategory_target>=self.minibatch:
+                    bigenough_target = True
+                batchbegin_target += 1
+                if batchbegin_target >= self.ntotalevents_target:
+                    batchbegin_target = 0
+
+            matchingarr_target = self.numpydata_target[match_target, :]
+            matchingwgt_target = self.eventweight_target[match_target, :]
+            randorder_target = np.random.permutation(matchingarr_target.shape[0])
+            nextbatch = matchingarr_target[randorder_target[0:self.minibatch], :]
+            nextbatchwgt = matchingwgt_target[randorder_target[0:self.minibatch], :]
+
+        '''
         if size is None:
             size = self.minibatch
         if self.datacounter + size >= self.ntotalevents:
@@ -199,7 +272,7 @@ class ABCDdnn(object):
             randorder = np.random.permutation(matchingarr.shape[0])
             nextbatch = matchingarr[randorder[0:self.minibatch], :]
             nextbatchwgt = matchingwgt[randorder[0:self.minibatch], :]
-
+        '''
         return nextbatch
 
     @tf.function
@@ -222,8 +295,8 @@ class ABCDdnn(object):
 
     def train(self, steps=1000):
         for istep in range(steps):
-            source = self.get_next_batch()
-            target = self.get_next_batch(cond=True)
+            source = self.get_next_batch(source=True)
+            target = self.get_next_batch()
             self.glossv = self.train_step(source, target)
             # generator update
             if istep % self.monitorevery == 0:
