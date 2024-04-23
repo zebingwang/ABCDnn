@@ -2,8 +2,10 @@ import tensorflow as tf
 import tensorflow.keras.layers as layers
 import numpy as np
 import matplotlib.pyplot as plt
+import random
 
 import os
+import sys
 import pickle
 
 from onehotencoder import OneHotEncoder_int
@@ -183,12 +185,55 @@ class ABCDdnn(object):
             self.epoch = self.monitor_record[-1][0] + 1
         pass
 
-    def get_next_batch(self, size=None, source=False):
+    def get_next_batch(self, size=None, source=False, cond=[]):
         """Return minibatch from random ordered numpy data
         """
+
+        '''
+        if size is None:
+            size = self.minibatch
+        
         if source:
-            if size is None:
-                size = self.minibatch
+            # find all data 
+            bigenough_source = False
+            match_source = (self.numpydata_source[:, self.inputdim:] == cond).all(axis=1)
+            nsamples_incategory_source = np.count_nonzero(match_source)
+            if nsamples_incategory_source>=self.minibatch:
+                bigenough_source = True
+
+            if not bigenough_source:
+                print("[[ERROR]]: Minibatch largen then the total number of events!")
+                sys.exit(0)
+
+            matchingarr_source = self.numpydata_source[match_source, :]
+            matchingwgt_source = self.eventweight_source[match_source, :]
+            randorder_source = np.random.permutation(matchingarr_source.shape[0])
+            nextbatch = matchingarr_source[randorder_source[0:self.minibatch], :]
+            nextbatchwgt = matchingwgt_source[randorder_source[0:self.minibatch], :]
+        else:
+            # find all data 
+            bigenough_target = False
+            match_target = (self.numpydata_target[:, self.inputdim:] == cond).all(axis=1)
+            nsamples_incategory_target = np.count_nonzero(match_target)
+            if nsamples_incategory_target>=self.minibatch:
+                bigenough_target = True
+
+            if not bigenough_target:
+                print("[[ERROR]]: Minibatch largen then the total number of events!")
+                sys.exit(0)
+
+            matchingarr_target = self.numpydata_target[match_target, :]
+            matchingwgt_target = self.eventweight_target[match_target, :]
+            randorder_target = np.random.permutation(matchingarr_target.shape[0])
+            nextbatch = matchingarr_target[randorder_target[0:self.minibatch], :]
+            nextbatchwgt = matchingwgt_target[randorder_target[0:self.minibatch], :]
+        '''
+        
+        '''
+        if size is None:
+            size = self.minibatch
+        
+        if source:
             if self.datacounter_source + size >= self.ntotalevents_source:
                 self.datacounter_source = 0
                 self.randorder_source = np.random.permutation(self.numpydata_source.shape[0])
@@ -197,6 +242,7 @@ class ABCDdnn(object):
 
 
             batchbegin_source = self.datacounter_source
+            #batchend_source = batchbegin_source + size
             self.nextconditional = self.numpydata_source[self.randorder_source[batchbegin_source], self.inputdim:]
             # find all data 
             bigenough_source = False
@@ -215,16 +261,6 @@ class ABCDdnn(object):
             nextbatch = matchingarr_source[randorder_source[0:self.minibatch], :]
             nextbatchwgt = matchingwgt_source[randorder_source[0:self.minibatch], :]
         else:
-            if size is None:
-                size = self.minibatch
-            if self.datacounter_target + size >= self.ntotalevents_target:
-                self.datacounter_target = 0
-                self.randorder_target = np.random.permutation(self.numpydata_target.shape[0])
-            else:
-                self.datacounter_target += size
-
-
-            batchbegin_target = self.datacounter_target
             # find all data 
             bigenough_target = False
             while(not bigenough_target):
@@ -232,47 +268,59 @@ class ABCDdnn(object):
                 nsamples_incategory_target = np.count_nonzero(match_target)
                 if nsamples_incategory_target>=self.minibatch:
                     bigenough_target = True
-                batchbegin_target += 1
-                if batchbegin_target >= self.ntotalevents_target:
-                    batchbegin_target = 0
 
             matchingarr_target = self.numpydata_target[match_target, :]
             matchingwgt_target = self.eventweight_target[match_target, :]
             randorder_target = np.random.permutation(matchingarr_target.shape[0])
             nextbatch = matchingarr_target[randorder_target[0:self.minibatch], :]
             nextbatchwgt = matchingwgt_target[randorder_target[0:self.minibatch], :]
-
         '''
+
+        # for random conditions
+        
         if size is None:
             size = self.minibatch
-        if self.datacounter + size >= self.ntotalevents:
-            self.datacounter = 0
-            self.randorder = np.random.permutation(self.numpydata.shape[0])
+        
+        self.nextconditional = cond
 
-        batchbegin = self.datacounter
-        if not cond:
-            batchend = batchbegin + size
-            self.datacounter += size
-            nextbatch = self.numpydata[self.randorder[batchbegin:batchend], 0::]
+        if source:
+            bigenough_source = False
+            while(not bigenough_source):
+                match_source = (self.numpydata_source[:, self.inputdim:] == self.nextconditional).all(axis=1)
+                nsamples_incategory_source = np.count_nonzero(match_source)
+                #print("[[INFO]] nsamples_incategory_source:", nsamples_incategory_source)
+                if nsamples_incategory_source>=self.minibatch:
+                    bigenough_source = True
+                else:
+                    size = nsamples_incategory_source
+                    #print("matched sample less than the minibatch in cat:", cond)
+
+            matchingarr_source = self.numpydata_source[match_source, :]
+            matchingwgt_source = self.eventweight_source[match_source, :]
+            randorder_source = np.random.permutation(matchingarr_source.shape[0])
+            nextbatch = matchingarr_source[randorder_source[0:size], :]
+            nextbatchwgt = matchingwgt_source[randorder_source[0:size], :]
         else:
-            nextconditional = self.numpydata[self.randorder[batchbegin], self.inputdim:]
             # find all data 
-            bigenough = False
-            while(not bigenough):
-                match = (self.numpydata[:, self.inputdim:] == nextconditional).all(axis=1)
-                nsamples_incategory = np.count_nonzero(match)
-                if nsamples_incategory>=self.minibatch:
-                    bigenough = True
-                batchbegin += 1
-                if batchbegin >= self.ntotalevents:
-                    batchbegin = 0
-                
-            matchingarr = self.numpydata[match, :]
-            matchingwgt = self.eventweight[match, :]
-            randorder = np.random.permutation(matchingarr.shape[0])
-            nextbatch = matchingarr[randorder[0:self.minibatch], :]
-            nextbatchwgt = matchingwgt[randorder[0:self.minibatch], :]
-        '''
+            bigenough_target = False
+            while(not bigenough_target):
+                match_target = (self.numpydata_target[:, self.inputdim:] == self.nextconditional).all(axis=1)
+                nsamples_incategory_target = np.count_nonzero(match_target)
+                #print("[[INFO]] nsamples_incategory_target:", nsamples_incategory_target)
+                if nsamples_incategory_target>=self.minibatch:
+                    bigenough_target = True
+                else:
+                    size = nsamples_incategory_target
+                    #print("matched sample less than the minibatch in cat:", cond)
+
+            matchingarr_target = self.numpydata_target[match_target, :]
+            matchingwgt_target = self.eventweight_target[match_target, :]
+            randorder_target = np.random.permutation(matchingarr_target.shape[0])
+            nextbatch = matchingarr_target[randorder_target[0:size], :]
+            nextbatchwgt = matchingwgt_target[randorder_target[0:size], :]
+        
+
+
         return nextbatch
 
     @tf.function
@@ -293,10 +341,15 @@ class ABCDdnn(object):
 
         return meangloss
 
-    def train(self, steps=1000):
+    def train(self, steps=1000, condlist={}):
         for istep in range(steps):
-            source = self.get_next_batch(source=True)
-            target = self.get_next_batch()
+            rand_cond = condlist[random.choice(list((condlist.keys())))]
+            #rand_cond = []
+            #source = self.get_next_batch(source=True)
+            #target = self.get_next_batch()
+            #print("[[INFO]] cond:", rand_cond)
+            source = self.get_next_batch(source=True, cond=rand_cond)
+            target = self.get_next_batch(source=False, cond=rand_cond)
             self.glossv = self.train_step(source, target)
             # generator update
             if istep % self.monitorevery == 0:

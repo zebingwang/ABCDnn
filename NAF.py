@@ -39,14 +39,14 @@ def NAF2(inputdim, conddim, nafdim, depth=1, permute=True):
             net = xiv
             condnet = xcondin
             condnet = tfk.layers.Dense(128, activation=tf.nn.swish)(condnet)
-            condnet = tfk.layers.Dense(128, activation=tf.nn.swish)(condnet)
+            condnet = tfk.layers.Dense(256, activation=tf.nn.swish)(condnet)
             w1 = tfk.layers.Dense(nafdim, activation=tf.nn.softplus)(condnet)
             b1 = tfk.layers.Dense(nafdim, activation=None)(condnet)
 
             net1 = tf.nn.sigmoid(w1 * net + b1)
             condnet = xcondin
             condnet = tfk.layers.Dense(128, activation=tf.nn.swish)(condnet)
-            condnet = tfk.layers.Dense(128, activation=tf.nn.swish)(condnet)
+            condnet = tfk.layers.Dense(256, activation=tf.nn.swish)(condnet)
             w2 = tfk.layers.Dense(nafdim, activation=tf.nn.softplus)(condnet)
             w2 = w2/ (1.0e-3 + tf.reduce_sum(w2, axis=1,keepdims=True)) # normalize
 
